@@ -1,0 +1,10 @@
+{
+  "name": "puppetlabs-imagemagick",
+  "version": "0.0.1",
+  "source": "git://github.com/alessani/puppet-imagemagick",
+  "author": "Matteo Alessani",
+  "license": "Apache",
+  "summary": "Manage imagemagick and libraries",
+  "description": "Manage imagemagick and libraries",
+  "dependencies": []
+}

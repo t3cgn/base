@@ -1,0 +1,51 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+ config.vm.box_url = "http://vm.phth.de/current/CentOS7.box"
+ config.vm.box = "centos7"
+ 
+  config.vm.network "forwarded_port", guest: 80, host: 41086
+ config.vm.network :forwarded_port, guest: 22, host: 2222, id: "ssh", disabled: true
+ config.vm.network :forwarded_port, guest: 22, host: 22086, auto_correct: true
+
+ config.vm.define "t3cgn" do |t3cgn|
+   t3cgn.vm.provider :virtualbox do |vb|
+       vb.name = "vagrant_t3cgn"
+   end
+
+   t3cgn.vm.synced_folder "../shared", "/vagrant"
+
+   t3cgn.vm.provision "puppet" do |puppet|
+     puppet.manifests_path = "puppet/manifests"
+     puppet.module_path = "puppet/modules"
+     puppet.manifest_file = "default.pp"
+     puppet.options = "--verbose --debug"
+   end
+
+#     # Additional shell commands for composer
+#     t3cgn.vm.provision "composer_deploy",
+#       type: "shell",
+#       inline: "grep -q -F 'SURF_HOME=/vagrant/deploy' /etc/environment || echo 'SURF_HOME=/vagrant/deploy' >> /etc/environment  && composer install -d=/vagrant/deploy",
+#       keep_color: true
+
+#    t3cgn.vm.provision "composer_typo3",
+#      type: "shell",
+#      inline: "cp /vagrant/composer/* /vagrant && composer install -d=/vagrant",
+#      keep_color: true
+#
+#    t3cgn.vm.provision :host_shell do |host_shell|
+#      host_shell.inline = './sync-to-host.sh'
+#    end
+
+#     t3cgn.vm.provision "sync_dam",
+#       type: "shell",
+#       inline: "/home/vagrant/sync-dam.sh -p zephir-t3cgn",
+#       privileged: false
+#
+#     t3cgn.vm.provision "sync_db",
+#       type: "shell",
+#       inline: "/home/vagrant/sync-db.sh -p zephir-t3cgn",
+#       privileged: false
+  end
+end

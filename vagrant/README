@@ -1,0 +1,9 @@
+# prerequisites
+
+synced folders: rsync
+On Windows, rsync installed with Cygwin or MinGW will be detected by Vagrant and works well.
+
+# needed plugins
+
+vagrant-host-shell:
+vagrant plugin install vagrant-host-shell

@@ -1,0 +1,40 @@
+{
+  "name": "Tugcgn/T3cgn",
+  "version": "1.0.0-dev",
+  "homepage": "http://www.t3cgn.de/",
+  "license": "GPL-2.0+",
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://composer.typo3.org/"
+    }
+  ],
+  "config": {
+    "preferred-install": "dist",
+    "bin-dir": "bin"
+  },
+  "extra": {
+    "typo3/cms": {
+      "composer-mode": false
+    },
+    "typo3/class-alias-loader": {
+      "always-add-alias-loader": true
+    }
+  },
+  "autoload": {
+    "psr-4": {
+      "Tugcgn\\T3cgn\\": "typo3conf/ext/iw_assets/Classes"
+    }
+  },
+  "require": {
+    "typo3-ter/gridelements": "^7.0",
+    "typo3-ter/nc-staticfilecache": "^3.4",
+    "typo3-ter/news": "^4.0",
+    "dmitryd/typo3-realurl": "^2.0",
+    "fluidtypo3/vhs": "^3.0",
+    "typo3-ter/extender": "^6.3.1"
+  },
+  "require-dev": {
+    "typo3-ter/t3adminer": "^7.0"
+  }
+}
