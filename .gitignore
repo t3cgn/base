@@ -1,5 +1,5 @@
 .idea
 vagrant/.vagrant
-shared/import
+shared/import/*
 !shared/import/import.sh
 htdocs/T3cgn/ext/t3cgn_template
