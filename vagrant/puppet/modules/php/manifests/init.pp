@@ -21,4 +21,10 @@ class php {
     mode    => '0644',
     source  => "puppet:///modules/php/php.ini",
   }
+   file { '/var/www/temp':
+        owner   => 'vagrant',
+        group   => 'apache',
+        mode    => '0775',
+        ensure => 'directory',
+      }
 }

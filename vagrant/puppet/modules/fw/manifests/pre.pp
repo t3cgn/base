@@ -61,6 +61,14 @@ class fw::pre {
     action   => 'accept',
   }
 
+  firewall { '200 allow incoming http':
+      chain    => 'INPUT',
+      state    => ['NEW'],
+      dport    => '80',
+      proto    => 'tcp',
+      action   => 'accept',
+    }
+
   firewall { '200 allow outgoing https':
     chain    => 'OUTPUT',
     state    => ['NEW'],
@@ -68,5 +76,13 @@ class fw::pre {
     proto    => 'tcp',
     action   => 'accept',
   }
+
+  firewall { '200 allow incoming https':
+      chain    => 'INPUT',
+      state    => ['NEW'],
+      dport    => '443',
+      proto    => 'tcp',
+      action   => 'accept',
+    }
 
 }
