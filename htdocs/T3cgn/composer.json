@@ -23,7 +23,7 @@
   },
   "autoload": {
     "psr-4": {
-      "Tugcgn\\T3cgn\\": "typo3conf/ext/iw_assets/Classes"
+      "T3cgn\\T3cgnTemplate\\": "typo3conf/ext/iw_assets/Classes"
     }
   },
   "require": {
