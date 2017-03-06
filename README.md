@@ -1,8 +1,8 @@
 # Start your Box
 Ein Paket für Datenbank- und Filesystem-Import ist zu finden unter:
 
-http://t3cgn.webicorns.com/export/files/html.tar.gz 
-http://t3cgn.webicorns.com/export/files/typo3.sql
+- http://t3cgn.webicorns.com/export/files/html.tar.gz 
+- http://t3cgn.webicorns.com/export/files/typo3.sql
 
 Im selben Verzeichnis liegt eine backup.sh, mit der man schnell und unkompliziert beide Dateien aus dem aktuellen Stand erzeugen kann.
 
