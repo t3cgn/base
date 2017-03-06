@@ -1,9 +1,12 @@
 # Start your Box
-Die Box und ein Datenbankbackup ist zu finden unter:
-http://t3cgn.webicorns.com/html.tar.gz 
-http://t3cgn.webicorns.com/typo3.sql
+Ein Paket für Datenbank- und Filesystem-Import ist zu finden unter:
 
-Beide Dateien werden in den Import Ordner gelegt 
+http://t3cgn.webicorns.com/export/html.tar.gz 
+http://t3cgn.webicorns.com/export/typo3.sql
+
+Im selben Verzeichnis liegt eine backup.sh, mit der man schnell und unkompliziert beide Dateien aus dem aktuellen Stand erzeugen kann.
+
+Beide Dateien werden in den Import Ordner gelegt und über das dort vorhandene Shell-Script importiert.
 
 - vagrant up 
 Beim hochfahren könnte es zu einem Fehler kommen <pre>The host_shell provisioner could not be found</pre>
