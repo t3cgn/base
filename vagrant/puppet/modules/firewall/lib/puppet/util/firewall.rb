@@ -150,7 +150,7 @@ module Puppet::Util::Firewall
     # Basic normalisation for older Facter
     os_key = Facter.value(:osfamily)
     os_key ||= case Facter.value(:operatingsystem)
-    when 'RedHat', 'CentOS', 'Fedora', 'Scientific', 'SL', 'SLC', 'Ascendos', 'CloudLinux', 'PSBM', 'OracleLinux', 'OVS', 'OEL', 'Amazon', 'XenServer'
+    when 'RedHat', 'CentOS', 'Fedora', 'Scientific', 'SL', 'SLC', 'Ascendos', 'CloudLinux', 'PSBM', 'OracleLinux', 'OVS', 'OEL', 'Amazon', 'XenServer', 'VirtuozzoLinux'
       'RedHat'
     when 'Debian', 'Ubuntu'
       'Debian'
@@ -160,6 +160,9 @@ module Puppet::Util::Firewall
 
     # Older iptables-persistent doesn't provide save action.
     if os_key == 'Debian'
+      # We need to call flush to clear Facter cache as it's possible the cached value will be nil due to the fact
+      # that the iptables-persistent package was potentially installed after the initial Fact gathering.
+      Facter.fact(:iptables_persistent_version).flush
       persist_ver = Facter.value(:iptables_persistent_version)
       if (persist_ver and Puppet::Util::Package.versioncmp(persist_ver, '0.5.0') < 0)
         os_key = 'Debian_manual'
@@ -172,7 +175,7 @@ module Puppet::Util::Firewall
     end
 
     # RHEL 7 and newer also use systemd to persist iptable rules
-    if os_key == 'RedHat' && ['RedHat','CentOS','Scientific','SL','SLC','Ascendos','CloudLinux','PSBM','OracleLinux','OVS','OEL','XenServer'].include?(Facter.value(:operatingsystem)) && Facter.value(:operatingsystemrelease).to_i >= 7
+    if os_key == 'RedHat' && ['RedHat','CentOS','Scientific','SL','SLC','Ascendos','CloudLinux','PSBM','OracleLinux','OVS','OEL','XenServer','VirtuozzoLinux'].include?(Facter.value(:operatingsystem)) && Facter.value(:operatingsystemrelease).to_i >= 7
       os_key = 'Fedora'
     end
 

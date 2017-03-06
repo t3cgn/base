@@ -42,6 +42,7 @@ Puppet::Type.newtype(:firewall) do
   feature :reject_type, "The ability to control reject messages"
   feature :log_level, "The ability to control the log level"
   feature :log_prefix, "The ability to add prefixes to log messages"
+  feature :log_uid, "Add UIDs to log messages"
   feature :mark, "Match or Set the netfilter mark value associated with the packet"
   feature :mss, "Match a given TCP MSS value or range."
   feature :tcp_flags, "The ability to match on particular TCP flag settings"
@@ -58,6 +59,10 @@ Puppet::Type.newtype(:firewall) do
   feature :mask, "Ability to match recent rules based on the ipv4 mask"
   feature :ipset, "Match against specified ipset list"
   feature :clusterip, "Configure a simple cluster of nodes that share a certain IP and MAC address without an explicit load balancer in front of them."
+  feature :length, "Match the length of layer-3 payload"
+  feature :string_matching, "String matching features"
+  feature :queue_num, "Which NFQUEUE to send packets to"
+  feature :queue_bypass, "If nothing is listening on queue_num, allow packets to bypass the queue"
 
   # provider specific features
   feature :iptables, "The provider provides iptables features."
@@ -289,7 +294,7 @@ Puppet::Type.newtype(:firewall) do
     EOS
 
     validate do |value|
-      Puppet.warning("port is deprecated and will be removed. Use dport and/or sport instead.")
+      Puppet.warning('Passing port to firewall is deprecated and will be removed. Use dport and/or sport instead.')
     end
 
     munge do |value|
@@ -368,12 +373,12 @@ Puppet::Type.newtype(:firewall) do
       *tcp*.
     EOS
 
-    newvalues(*[:tcp, :udp, :icmp, :"ipv6-icmp", :esp, :ah, :vrrp, :igmp, :ipencap, :ipv4, :ipv6, :ospf, :gre, :cbt, :all].collect do |proto|
+    newvalues(*[:ip, :tcp, :udp, :icmp, :"ipv6-icmp", :esp, :ah, :vrrp, :igmp, :ipencap, :ipv4, :ipv6, :ospf, :gre, :cbt, :sctp, :pim, :all].collect do |proto|
       [proto, "! #{proto}".to_sym]
     end.flatten)
     defaultto "tcp"
   end
-  
+
   # tcp-specific
   newproperty(:mss) do
     desc <<-EOS
@@ -475,6 +480,40 @@ Puppet::Type.newtype(:firewall) do
     end
   end
 
+  newproperty(:goto, :required_features => :iptables) do
+    desc <<-EOS
+      The value for the iptables --goto parameter. Normal values are:
+
+      * QUEUE
+      * RETURN
+      * DNAT
+      * SNAT
+      * LOG
+      * MASQUERADE
+      * REDIRECT
+      * MARK
+
+      But any valid chain name is allowed.
+    EOS
+
+    validate do |value|
+      unless value =~ /^[a-zA-Z0-9\-_]+$/
+        raise ArgumentError, <<-EOS
+          Goto destination must consist of alphanumeric characters, an
+          underscore or a yphen.
+        EOS
+      end
+
+      if ["accept","reject","drop"].include?(value.downcase)
+        raise ArgumentError, <<-EOS
+          Goto destination should not be one of ACCEPT, REJECT or DROP. Use
+          the action property instead.
+        EOS
+      end
+
+    end
+  end
+
   # Interface specific matching properties
   newproperty(:iniface, :required_features => :interface_match) do
     desc <<-EOS
@@ -568,6 +607,15 @@ Puppet::Type.newtype(:firewall) do
       When combined with jump => "LOG" specifies the log prefix to use when
       logging.
     EOS
+  end
+
+  newproperty(:log_uid, :required_features => :log_uid) do
+    desc <<-EOS
+      When combined with jump => "LOG" specifies the uid of the process making
+      the connection.
+    EOS
+
+    newvalues(:true, :false)
   end
 
   # ICMP matching property
@@ -884,7 +932,7 @@ Puppet::Type.newtype(:firewall) do
       Set DSCP Markings.
     EOS
   end
-  
+
   newproperty(:set_dscp_class, :required_features => :iptables) do
     desc <<-EOS
       This sets the DSCP field according to a predefined DiffServ class.
@@ -1144,14 +1192,23 @@ Puppet::Type.newtype(:firewall) do
     EOS
   end
 
-  newproperty(:ipset, :required_features => :ipset) do
+  newproperty(:ipset, :required_features => :ipset, :array_matching => :all) do
     desc <<-EOS
       Matches against the specified ipset list.
-      Requires ipset kernel module.
+      Requires ipset kernel module. Will accept a single element or an array.
       The value is the name of the blacklist, followed by a space, and then
       'src' and/or 'dst' separated by a comma.
       For example: 'blacklist src,dst'
     EOS
+
+    def is_to_s(value)
+      should_to_s(value)
+    end
+
+    def should_to_s(value)
+      value = [value] unless value.is_a?(Array)
+      value.join(', ')
+    end
   end
 
   newproperty(:checksum_fill, :required_features => :iptables) do
@@ -1342,6 +1399,105 @@ Puppet::Type.newtype(:firewall) do
     EOS
   end
 
+  newproperty(:length, :required_features => :length) do
+    desc <<-EOS
+      Sets the length of layer-3 payload to match.
+    EOS
+
+    munge do |value|
+      match = value.to_s.match("^([0-9]+)(-)?([0-9]+)?$")
+      if match.nil?
+        raise ArgumentError, "Length value must either be an integer or a range"
+      end
+
+      low = match[1].to_i
+      if !match[3].nil?
+        high = match[3].to_i
+      end
+
+      if (low < 0 or low > 65535) or \
+        (!high.nil? and (high < 0 or high > 65535 or high < low))
+        raise ArgumentError, "Length values must be between 0 and 65535"
+      end
+
+      value = low.to_s
+      if !high.nil?
+        value << ":" << high.to_s
+      end
+      value
+    end
+  end
+
+  newproperty(:string, :required_features => :string_matching) do
+    desc <<-EOS
+      String matching feature. Matches the packet against the pattern
+      given as an argument.
+    EOS
+
+    munge do |value|
+       value = "'" + value + "'"
+    end
+  end
+
+  newproperty(:string_algo, :required_features => :string_matching) do
+    desc <<-EOS
+      String matching feature, pattern matching strategy.
+    EOS
+
+    newvalues(:bm, :kmp)
+  end
+
+  newproperty(:string_from, :required_features => :string_matching) do
+    desc <<-EOS
+      String matching feature, offset from which we start looking for any matching.
+    EOS
+  end
+
+  newproperty(:string_to, :required_features => :string_matching) do
+    desc <<-EOS
+      String matching feature, offset up to which we should scan.
+    EOS
+  end
+
+  newproperty(:queue_num, :required_features => :queue_num) do
+    desc <<-EOS
+      Used with NFQUEUE jump target.
+      What queue number to send packets to
+    EOS
+    munge do |value|
+      match = value.to_s.match("^([0-9])*$")
+      if match.nil?
+        raise ArgumentError, "queue_num must be an integer"
+      end
+
+      if match[1].to_i > 65535 || match[1].to_i < 0
+        raise ArgumentError, "queue_num must be between 0 and 65535"
+      end
+      value
+    end
+  end
+
+  newproperty(:queue_bypass, :required_features => :queue_bypass) do
+    desc <<-EOS
+      Used with NFQUEUE jump target
+      Allow packets to bypass :queue_num if userspace process is not listening
+    EOS
+    newvalues(:true, :false)
+  end
+
+  newproperty(:src_cc) do
+    desc <<-EOS
+      src attribute for the module geoip
+    EOS
+    newvalues(/^[A-Z]{2}(,[A-Z]{2})*$/)
+  end
+
+  newproperty(:dst_cc) do
+    desc <<-EOS
+      dst attribute for the module geoip
+    EOS
+    newvalues(/^[A-Z]{2}(,[A-Z]{2})*$/)
+  end
 
   autorequire(:firewallchain) do
     reqs = []
@@ -1381,6 +1537,14 @@ Puppet::Type.newtype(:firewall) do
       %w{firewalld iptables ip6tables iptables-persistent netfilter-persistent}
     else
       []
+    end
+  end
+
+  # autobefore is only provided since puppet 4.0
+  if Puppet.version.to_f >= 4.0
+    # On RHEL 7 this needs to be threaded correctly to manage SE Linux permissions after persisting the rules
+    autobefore(:file) do
+      [ '/etc/sysconfig/iptables', '/etc/sysconfig/ip6tables' ]
     end
   end
 
@@ -1488,9 +1652,9 @@ Puppet::Type.newtype(:firewall) do
       end
     end
 
-    if value(:log_prefix) || value(:log_level)
+    if value(:log_prefix) || value(:log_level) || value(:log_uid)
       unless value(:jump).to_s == "LOG"
-        self.fail "Parameter log_prefix and log_level require jump => LOG"
+        self.fail "Parameter log_prefix, log_level and log_uid require jump => LOG"
       end
     end
 
@@ -1531,6 +1695,12 @@ Puppet::Type.newtype(:firewall) do
     if value(:checksum_fill)
       unless value(:jump).to_s == "CHECKSUM" && value(:table).to_s == "mangle"
         self.fail "Parameter checksum_fill requires jump => CHECKSUM and table => mangle"
+      end
+    end
+
+    if value(:queue_num) || value(:queue_bypass)
+      unless value(:jump).to_s == "NFQUEUE"
+        self.fail "Paramter queue_number and queue_bypass require jump => NFQUEUE"
       end
     end
 

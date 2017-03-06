@@ -20,6 +20,7 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
   has_feature :reject_type
   has_feature :log_level
   has_feature :log_prefix
+  has_feature :log_uid
   has_feature :mark
   has_feature :mss
   has_feature :tcp_flags
@@ -33,6 +34,10 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
   has_feature :mask
   has_feature :ipset
   has_feature :clusterip
+  has_feature :length
+  has_feature :string_matching
+  has_feature :queue_num
+  has_feature :queue_bypass
 
   optional_commands({
     :iptables => 'iptables',
@@ -72,9 +77,12 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     :ipset                 => "-m set --match-set",
     :isfragment            => "-f",
     :jump                  => "-j",
+    :goto                  => "-g",
+    :length                => "-m length --length",
     :limit                 => "-m limit --limit",
     :log_level             => "--log-level",
     :log_prefix            => "--log-prefix",
+    :log_uid               => "--log-uid",
     :mac_source            => ["-m mac --mac-source", "--mac-source"],
     :mask                  => '--mask',
     :match_mark            => "-m mark --mark",
@@ -84,6 +92,8 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     :pkttype               => "-m pkttype --pkt-type",
     :port                  => '-m multiport --ports',
     :proto                 => "-p",
+    :queue_num             => "--queue-num",
+    :queue_bypass          => "--queue-bypass",
     :random                => "--random",
     :rdest                 => "--rdest",
     :reap                  => "--reap",
@@ -108,6 +118,10 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     :stat_packet           => '--packet',
     :stat_probability      => '--probability',
     :state                 => "-m state --state",
+    :string                => "-m string --string",
+    :string_algo           => "--algo",
+    :string_from           => "--from",
+    :string_to             => "--to",
     :table                 => "-t",
     :tcp_flags             => "-m tcp --tcp-flags",
     :todest                => "--to-destination",
@@ -132,6 +146,8 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     :clusterip_total_nodes => "--total-nodes",
     :clusterip_local_node  => "--local-node",
     :clusterip_hash_init   => "--hash-init",
+    :src_cc                => "--src-cc",
+    :dst_cc                => "--dst-cc",
   }
 
   # These are known booleans that do not take a value, but we want to munge
@@ -140,6 +156,7 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     :checksum_fill,
     :clamp_mss_to_pmtu,
     :isfragment,
+    :log_uid,
     :random,
     :rdest,
     :reap,
@@ -150,9 +167,10 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     :time_contiguous,
     :kernel_timezone,
     :clusterip_new,
+    :queue_bypass,
   ]
 
-  # Properties that use "-m <ipt module name>" (with the potential to have multiple 
+  # Properties that use "-m <ipt module name>" (with the potential to have multiple
   # arguments against the same IPT module) must be in this hash. The keys in this
   # hash are the IPT module names, with the values being an array of the respective
   # supported arguments for this IPT module.
@@ -169,7 +187,8 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     :addrtype  => [:src_type, :dst_type],
     :iprange   => [:src_range, :dst_range],
     :owner     => [:uid, :gid],
-    :time      => [:time_start, :time_stop, :month_days, :week_days, :date_start, :date_stop, :time_contiguous, :kernel_timezone]
+    :time      => [:time_start, :time_stop, :month_days, :week_days, :date_start, :date_stop, :time_contiguous, :kernel_timezone],
+    :geoip     => [:src_cc, :dst_cc]
   }
 
   def self.munge_resource_map_from_existing_values(resource_map_original, compare)
@@ -251,12 +270,14 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     :stat_mode, :stat_every, :stat_packet, :stat_probability,
     :src_range, :dst_range, :tcp_flags, :uid, :gid, :mac_source, :sport, :dport, :port,
     :src_type, :dst_type, :socket, :pkttype, :name, :ipsec_dir, :ipsec_policy,
-    :state, :ctstate, :icmp, :limit, :burst, :recent, :rseconds, :reap,
-    :rhitcount, :rttl, :rname, :mask, :rsource, :rdest, :ipset, :jump, :clusterip_new, :clusterip_hashmode,
-    :clusterip_clustermac, :clusterip_total_nodes, :clusterip_local_node, :clusterip_hash_init,
+    :state, :ctstate, :icmp, :limit, :burst, :length, :recent, :rseconds, :reap,
+    :rhitcount, :rttl, :rname, :mask, :rsource, :rdest, :ipset, :string, :string_algo,
+    :string_from, :string_to, :jump, :goto, :clusterip_new, :clusterip_hashmode,
+    :clusterip_clustermac, :clusterip_total_nodes, :clusterip_local_node, :clusterip_hash_init, :queue_num, :queue_bypass,
     :clamp_mss_to_pmtu, :gateway, :set_mss, :set_dscp, :set_dscp_class, :todest, :tosource, :toports, :to, :checksum_fill, :random, :log_prefix,
-    :log_level, :reject, :set_mark, :match_mark, :mss, :connlimit_above, :connlimit_mask, :connmark, :time_start, :time_stop,
-    :month_days, :week_days, :date_start, :date_stop, :time_contiguous, :kernel_timezone
+    :log_level, :log_uid, :reject, :set_mark, :match_mark, :mss, :connlimit_above, :connlimit_mask, :connmark, :time_start, :time_stop,
+    :month_days, :week_days, :date_start, :date_stop, :time_contiguous, :kernel_timezone,
+    :src_cc, :dst_cc
   ]
 
   def insert
@@ -271,7 +292,22 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
 
   def delete
     debug 'Deleting rule %s' % resource[:name]
-    iptables delete_args
+    begin
+      iptables delete_args
+    rescue Puppet::ExecutionFailure => e
+      # Check to see if the iptables rule is already gone. This can sometimes
+      # happen as a side effect of other resource changes. If it's not gone,
+      # raise the error as per usual.
+      raise e unless self.resource.property(:ensure).insync?(:absent)
+
+      # If it's already gone, there is no error. Still record a change, but
+      # adjust the change message to indicate ambiguity over what work Puppet
+      # actually did to remove the resource, vs. what could have been a side
+      # effect of something else puppet did.
+      resource.property(:ensure).singleton_class.send(:define_method, :change_to_s) do |a,b|
+        "ensured absent"
+      end
+    end
   end
 
   def exists?
@@ -320,11 +356,19 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     # PRE-PARSE CLUDGING
     ####################
 
+    # The match for ttl
+    values = values.gsub(/(!\s+)?-m ttl (!\s+)?--ttl-(eq|lt|gt) [0-9]+/, '')
     # --tcp-flags takes two values; we cheat by adding " around it
     # so it behaves like --comment
     values = values.gsub(/(!\s+)?--tcp-flags (\S*) (\S*)/, '--tcp-flags "\1\2 \3"')
-    # ditto for --match-set
-    values = values.sub(/(!\s+)?--match-set (\S*) (\S*)/, '--match-set "\1\2 \3"')
+    # --match-set can have multiple values with weird iptables format
+    if values =~ /-m set --match-set/
+      values = values.gsub(/(!\s+)?--match-set (\S*) (\S*)/, '--match-set \1\2 \3')
+      ind  = values.index('-m set --match-set')
+      sets = values.scan(/-m set --match-set ((?:!\s+)?\S* \S*)/)
+      values = values.gsub(/-m set --match-set (!\s+)?\S* \S* /, '')
+      values.insert(ind, "-m set --match-set \"#{sets.join(';')}\" ")
+    end
     # we do a similar thing for negated address masks (source and destination).
     values = values.gsub(/(-\S+) (!)\s?(\S*)/,'\1 "\2 \3"')
     # the actual rule will have the ! mark before the option.
@@ -346,6 +390,8 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
         (\s--next)?/x,
         '--pol "ipsec\1\2\3\4\5\6\7\8" '
     )
+    # on some iptables versions, --connlimit-saddr switch is added after the rule is applied
+    values = values.gsub(/--connlimit-saddr/, '')
 
     resource_map = munge_resource_map_from_existing_values(@resource_map, values)
 
@@ -356,7 +402,7 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
         # -f requires special matching:
         # only replace those -f that are not followed by an l to
         # distinguish between -f and the '-f' inside of --tcp-flags.
-        values = values.sub(/-f(?!l)(?=.*--comment)/, '-f true')
+        values = values.sub(/\s-f(?!l)(?=.*--comment)/, ' -f true')
       else
         values = values.sub(/#{resource_map[bool]}/, "#{resource_map[bool]} true")
       end
@@ -414,8 +460,10 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     [:dport, :sport, :port, :state, :ctstate].each do |prop|
       hash[prop] = hash[prop].split(',') if ! hash[prop].nil?
     end
-  
-    ## clean up DSCP class to HEX mappings 
+
+    hash[:ipset] = hash[:ipset].split(';') if ! hash[:ipset].nil?
+
+    ## clean up DSCP class to HEX mappings
     valid_dscp_classes = {
       '0x0a' => 'af11',
       '0x0c' => 'af12',
@@ -464,6 +512,9 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
         elem.gsub(/:/,'-')
       end
     end
+    if hash[:length]
+      hash[:length].gsub!(/:/,'-')
+    end
 
     # Invert any rules that are prefixed with a '!'
     [
@@ -473,7 +524,6 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
       :dport,
       :dst_range,
       :dst_type,
-      :ipset,
       :port,
       :proto,
       :source,
@@ -567,7 +617,7 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
 
   def delete_args
     # Split into arguments
-    line = properties[:line].gsub(/^\-A /, '-D ').split(/\s(?=(?:[^"]|"[^"]*")*$)/).map{|v| v.gsub(/"/, '')}
+    line = properties[:line].gsub(/^\-A /, '-D ').split(/\s(?=(?:[^"]|"[^"]*")*$)/).map{|v| v.gsub(/^"/, '').gsub(/"$/, '')}
     line.unshift("-t", properties[:table])
   end
 
@@ -581,6 +631,14 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
     known_booleans = self.class.instance_variable_get('@known_booleans')
     resource_map = self.class.instance_variable_get('@resource_map')
     resource_map = munge_resource_map_from_resource(resource_map, resource)
+
+    # Always attempt to wait for a lock for iptables to prevent failures when
+    # puppet is running at the same time something else is managing the rules
+    # note: --wait wasn't added untip iptables version 1.4.20
+    iptables_version = Facter.value('iptables_version')
+    if (iptables_version && Puppet::Util::Package.versioncmp(iptables_version, '1.4.20') >= 0)
+      args << ['--wait']
+    end
 
     resource_list.each do |res|
       resource_value = nil
@@ -615,7 +673,7 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
         #ruby 1.8.7 can't .match Symbols ------------------ ^
         resource_value = resource_value.to_s.sub!(/^!\s*/, '').to_sym
         args.insert(-2, '!')
-      elsif resource_value.is_a?(Array)
+      elsif resource_value.is_a?(Array) and res != :ipset
         should_negate = resource_value.index do |value|
           #ruby 1.8.7 can't .match symbols
           value.to_s.match(/^(!)\s+/)
@@ -646,10 +704,20 @@ Puppet::Type.type(:firewall).provide :iptables, :parent => Puppet::Provider::Fir
         end
       end
 
+      # ipset can accept multiple values with weird iptables arguments
+      if res == :ipset
+        resource_value.join(" #{[resource_map[res]].flatten.first} ").split(' ').each do |a|
+          if a.sub!(/^!\s*/, '')
+            # Negate ipset options
+            args.insert(-2, '!')
+          end
+
+          args << a if a.length > 0
+        end
       # our tcp_flags takes a single string with comma lists separated
       # by space
       # --tcp-flags expects two arguments
-      if res == :tcp_flags or res == :ipset
+      elsif res == :tcp_flags
         one, two = resource_value.split(' ')
         args << one
         args << two

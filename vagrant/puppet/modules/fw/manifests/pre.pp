@@ -1,11 +1,7 @@
 class fw::pre {
-  package { [
-    'iptables-services'
-  ]:
-    ensure => present
-  }
 
   Firewall {
+    ensure => present,
     require => undef,
   }
 
@@ -61,14 +57,6 @@ class fw::pre {
     action   => 'accept',
   }
 
-  firewall { '200 allow incoming http':
-      chain    => 'INPUT',
-      state    => ['NEW'],
-      dport    => '80',
-      proto    => 'tcp',
-      action   => 'accept',
-    }
-
   firewall { '200 allow outgoing https':
     chain    => 'OUTPUT',
     state    => ['NEW'],
@@ -77,10 +65,10 @@ class fw::pre {
     action   => 'accept',
   }
 
-  firewall { '200 allow incoming https':
-      chain    => 'INPUT',
+  firewall { '200 allow outgoing smtp':
+      chain    => 'OUTPUT',
       state    => ['NEW'],
-      dport    => '443',
+      dport    => '25',
       proto    => 'tcp',
       action   => 'accept',
     }

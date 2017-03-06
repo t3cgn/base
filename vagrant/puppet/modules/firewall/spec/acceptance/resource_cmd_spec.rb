@@ -3,7 +3,7 @@ require 'spec_helper_acceptance'
 # Here we want to test the the resource commands ability to work with different
 # existing ruleset scenarios. This will give the parsing capabilities of the
 # code a good work out.
-describe 'puppet resource firewall command:', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
+describe 'puppet resource firewall command' do
   before(:all) do
     # In order to properly check stderr for anomalies we need to fix the deprecation warnings from puppet.conf.
     config = shell('puppet config print config').stdout
@@ -139,6 +139,21 @@ describe 'puppet resource firewall command:', :unless => UNSUPPORTED_PLATFORMS.i
     before :all do
       iptables_flush_all_tables
       shell('iptables -A INPUT -s 10.0.0.0/8 -p udp -m udp -j ACCEPT')
+    end
+
+    it do
+      shell('puppet resource firewall') do |r|
+        r.exit_code.should be_zero
+        # don't check stdout, testing preexisting rules, output is normal
+        r.stderr.should be_empty
+      end
+    end
+  end
+
+  context 'accepts rules with -m ttl' do
+    before :all do
+      iptables_flush_all_tables
+      shell('iptables -t nat -A OUTPUT -s 10.0.0.0/8 -p tcp -m ttl ! --ttl-eq 42 -j REDIRECT --to-ports 12299')
     end
 
     it do

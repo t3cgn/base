@@ -1,11 +1,9 @@
 require 'spec_helper_acceptance'
 
-describe 'firewall type', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
-
-  describe 'reset' do
-    it 'deletes all rules' do
-      shell('iptables --flush; iptables -t nat --flush; iptables -t mangle --flush')
-    end
+describe 'firewall basics', docker: true do
+  before :all do
+    iptables_flush_all_tables
+    ip6tables_flush_all_tables
   end
 
   describe 'name' do
@@ -1533,24 +1531,31 @@ describe 'firewall type', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfami
               require => Package['ipset'],
             }
             class { '::firewall': }
-            exec { 'create ipset':
+            exec { 'create ipset blacklist':
               command => 'ipset create blacklist hash:ip,port family inet6 maxelem 1024 hashsize 65535 timeout 120',
               path    => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
               require => Package['ipset'],
             }
-            exec { 'add blacklist':
+            -> exec { 'create ipset honeypot':
+              command => 'ipset create honeypot hash:ip family inet6 maxelem 1024 hashsize 65535 timeout 120',
+              path    => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+            }
+            -> exec { 'add blacklist':
               command => 'ipset add blacklist 2001:db8::1,80',
               path    => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-              require => Exec['create ipset'],
+            }
+            -> exec { 'add honeypot':
+              command => 'ipset add honeypot 2001:db8::5',
+              path    => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
             }
             firewall { '612 - test':
               ensure   => present,
               chain    => 'INPUT',
               proto    => tcp,
               action   => drop,
-              ipset    => 'blacklist src,src',
+              ipset    => ['blacklist src,dst', '! honeypot dst'],
               provider => 'ip6tables',
-              require  => Exec['add blacklist'],
+              require  => Exec['add honeypot'],
             }
             EOS
 
@@ -1559,7 +1564,7 @@ describe 'firewall type', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfami
 
           it 'should contain the rule' do
             shell('ip6tables-save') do |r|
-              expect(r.stdout).to match(/-A INPUT -p tcp -m comment --comment "612 - test" -m set --match-set blacklist src,src -j DROP/)
+              expect(r.stdout).to match(/-A INPUT -p tcp -m comment --comment "612 - test" -m set --match-set blacklist src,dst -m set ! --match-set honeypot dst -j DROP/)
             end
           end
         end
@@ -2326,6 +2331,47 @@ describe 'firewall type', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfami
     it 'should not contain the rule' do
       shell('iptables-save') do |r|
         expect(r.stdout).to_not match(/-A INPUT -p tcp -m comment --comment "700 - test" -j LOG --log-prefix "FW-A-INPUT: "/)
+      end
+    end
+  end
+
+  context 'log_uid is true' do
+    it 'adds the rule' do
+      pp = <<-EOS
+      class { '::firewall': }
+      firewall { '700 - test log_uid':
+        chain   => 'OUTPUT',
+        jump    => 'LOG',
+        log_uid => true,
+      }
+      EOS
+
+      apply_manifest(pp, :catch_failures => true)
+    end
+
+    it 'should contain the rule' do
+      shell('iptables-save') do |r|
+        expect(r.stdout).to match(/-A OUTPUT -p tcp -m comment --comment "700 - test log_uid" -j LOG --log-uid/)
+      end
+    end
+
+    it 'removes the rule' do
+      pp = <<-EOS
+      class  { '::firewall': }
+      firewall { '700 - test log_uid':
+        chain   => 'OUTPUT',
+        jump    => 'LOG',
+        log_uid => false,
+        ensure  => absent,
+      }
+      EOS
+
+      apply_manifest(pp, :catch_failures => true)
+    end
+
+    it 'should not contain the rule' do
+      shell('iptables-save') do |r|
+        expect(r.stdout).to_not match(/-A OUTPUT -p tcp -m comment --comment "700 - test log_uid" -j --log-uid/)
       end
     end
   end

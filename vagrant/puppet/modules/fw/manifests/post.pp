@@ -1,5 +1,10 @@
 class fw::post {
 
+  Firewall {
+    ensure => present,
+    require => undef,
+  }
+
   firewall { '900 log dropped input chain':
     chain      => 'INPUT',
     jump       => 'LOG',
